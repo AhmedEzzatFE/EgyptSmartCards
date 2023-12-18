@@ -1,0 +1,11 @@
+body {
+  box-sizing: border-box;
+  background-color: white;
+  color: #000;
+  margin: 0;
+  display: grid !important;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
