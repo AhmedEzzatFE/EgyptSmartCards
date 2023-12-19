@@ -1,6 +1,10 @@
-// src/Weather.tsx
-import React, { useState, useEffect } from "react";
+// Weather.tsx
+import React, { useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
+
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+import WeatherDetailPage from "./WeatherDetailPage";
 import {
   TextField,
   Button,
@@ -9,6 +13,7 @@ import {
   TableRow,
   TableCell,
   TableBody,
+  FormControl,
 } from "@mui/material";
 
 interface WeatherData {
@@ -16,24 +21,24 @@ interface WeatherData {
   temperature: number;
   condition: string;
 }
-
-interface WeatherDetail {
+export interface WeatherDetailProps extends WeatherData {
   humidity: number;
   windSpeed: number;
   // Add more details as needed
 }
 
-const Weather: React.FC = () => {
+const WeatherTable: React.FC = () => {
   const [city, setCity] = useState<string>("");
-  const [weatherData, setWeatherData] = useState<WeatherData[]>([]);
-  const [selectedDay, setSelectedDay] = useState<WeatherDetail | null>(null);
+  const [weatherData, setWeatherData] = useState<WeatherDetailProps[]>([]);
+  const [, setSelectedDay] = useState<WeatherDetailProps | null>(null);
+
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const API_KEY = "093a27ab8cb0ad95178dc7b56f0e937b";
   const API_URL = "https://api.openweathermap.org/data/2.5/forecast";
 
-  const fetchWeatherData = async (cityName: string, numberOfDays: number) => {
+  const fetchWeatherData = async (cityName: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -45,43 +50,44 @@ const Weather: React.FC = () => {
       const currentDate = new Date();
       currentDate.setHours(0, 0, 0, 0);
 
-      // Calculate the start date by adding 2 days to the current date
       const startDate = new Date(currentDate);
       startDate.setDate(startDate.getDate() + 3);
 
-      const data: WeatherData[] = response.data.list.reduce(
-        (acc: WeatherData[], item: any) => {
+      const data: WeatherDetailProps[] = response.data.list.reduce(
+        (
+          fullDataAccumulator: WeatherDetailProps[],
+          //   accumulator: WeatherData[],
+          item: any
+        ) => {
           const itemDate = new Date(item.dt_txt);
           itemDate.setHours(0, 0, 0, 0);
 
-          // Check if the item's date is after or equal to the start date
           if (itemDate >= startDate) {
-            // Check if a record for the day already exists
-            const existingRecord = acc.find((record) => {
+            const existingRecord = fullDataAccumulator.find((record) => {
               const existingDate = new Date(record.date);
               return existingDate.getTime() === itemDate.getTime();
             });
 
-            // If a record doesn't exist, add it to the accumulator
             if (!existingRecord) {
-              acc.push({
+              //   accumulator.push({
+              //     date: item.dt_txt,
+              //     temperature: item.main.temp,
+              //     condition: item.weather[0].description,
+              //   });
+              fullDataAccumulator.push({
                 date: item.dt_txt,
                 temperature: item.main.temp,
                 condition: item.weather[0].description,
+                humidity: item.main.humidity,
+                windSpeed: item.wind.speed,
               });
             }
           }
 
-          // If we have enough records for the desired number of days, exit the loop
-          if (acc.length >= numberOfDays) {
-            return acc;
-          }
-
-          return acc;
+          return fullDataAccumulator;
         },
         []
       );
-
       setWeatherData(data);
     } catch (error) {
       setError("Error fetching weather data");
@@ -96,68 +102,91 @@ const Weather: React.FC = () => {
 
   const handleSearch = () => {
     if (city.trim() !== "") {
-      // Pass the desired number of days (3 or 5)
-      fetchWeatherData(city, 3); // Change 3 to 5 if you want 5 days
+      fetchWeatherData(city);
     }
   };
 
-  const handleDayClick = (index: number) => {
-    // Fetch more details for the selected day and update selectedDay state
-    // You can extend the API call and update the WeatherDetail state
-    const selectedDate = weatherData[index].date;
-    // Make another API call to get more details based on the selectedDate
-    // Update setSelectedDay with the detailed data
+  const handleDayClick = (selectedWeather: WeatherDetailProps) => {
+    setSelectedDay(selectedWeather);
   };
 
   return (
     <div>
-      <TextField
-        label="Enter city name"
-        variant="outlined"
-        value={city}
-        onChange={handleCityChange}
-      />
-      <Button variant="contained" onClick={handleSearch}>
-        Search
-      </Button>
+      <FormControl sx={{ display: "flex", flexDirection: "row" }}>
+        <TextField
+          sx={{ paddingRight: "20px" }}
+          label="Enter city name"
+          variant="outlined"
+          value={city}
+          onChange={handleCityChange}
+        />
 
+        <Button variant="contained" onClick={handleSearch}>
+          Search
+        </Button>
+      </FormControl>
       {loading && <p>Loading...</p>}
       {error && <p>{error}</p>}
 
-      {weatherData.length > 0 && (
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Date</TableCell>
-              <TableCell>Temperature (°C)</TableCell>
-              <TableCell>Condition</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {weatherData.map((item, index) => (
-              <TableRow
-                key={index}
-                onClick={() => handleDayClick(index)}
-                hover
-                style={{ cursor: "pointer" }}>
-                <TableCell>{item.date}</TableCell>
-                <TableCell>{item.temperature}</TableCell>
-                <TableCell>{item.condition}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-
-      {selectedDay && (
-        <div>
-          <h2>Details for the selected day:</h2>
-          <p>Humidity: {selectedDay?.humidity}</p>
-          <p>Wind Speed: {selectedDay?.windSpeed}</p>
-          {/* Add more details as needed */}
-        </div>
-      )}
+      <WeatherTableComponent
+        weatherData={weatherData}
+        onRowClick={handleDayClick}
+      />
     </div>
+  );
+};
+
+interface WeatherTableProps {
+  weatherData: WeatherDetailProps[];
+  onRowClick: (item: WeatherDetailProps) => void;
+}
+
+const WeatherTableComponent: React.FC<WeatherTableProps> = ({
+  weatherData,
+  onRowClick,
+}) => {
+  const navigate = useNavigate(); // Add this line to initialize useNavigate()
+
+  const handleRowClick = (item: WeatherDetailProps) => {
+    onRowClick(item);
+    navigate("/detail", { state: { selectedDay: item } });
+  };
+  return (
+    <Table sx={{ marginTop: "40px" }}>
+      <TableHead>
+        <TableRow>
+          <TableCell>Date</TableCell>
+          <TableCell>Temperature (°C)</TableCell>
+          <TableCell>Condition</TableCell>
+        </TableRow>
+      </TableHead>
+
+      {weatherData.length > 0 && (
+        <TableBody>
+          {weatherData.map((item, index) => (
+            <TableRow
+              key={index}
+              onClick={() => handleRowClick(item)}
+              hover
+              style={{ cursor: "pointer" }}>
+              <TableCell>{item.date}</TableCell>
+              <TableCell>{item.temperature}</TableCell>
+              <TableCell>{item.condition}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      )}
+    </Table>
+  );
+};
+const Weather: React.FC = () => {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<WeatherTable />} />
+        <Route path="/detail" element={<WeatherDetailPage />} />
+      </Routes>
+    </Router>
   );
 };
 
